@@ -17,18 +17,23 @@ import {
   onSnapshot
 } from 'firebase/firestore';
 import { auth, db, googleProvider } from '../lib/firebase';
-import { UserProfile, TeacherRole, SchoolProfile } from '../types';
+import { UserProfile, TeacherRole, SchoolProfile, SchoolYear } from '../types';
+
+const LOCAL_USER_STORAGE_KEY = 'dz_examcraft_local_teacher_profile';
 
 interface AuthContextType {
   currentUser: User | null;
   userProfile: UserProfile | null;
   loading: boolean;
+  isLocalMode: boolean;
   login: (email: string, pass: string) => Promise<void>;
   signUp: (email: string, pass: string, displayName: string, extra?: Partial<UserProfile>) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   updateUserProfile: (data: Partial<UserProfile>) => Promise<void>;
   sendPasswordReset: (email: string) => Promise<void>;
+  createLocalAccount: (email: string, displayName: string, extra?: Partial<UserProfile>) => Promise<void>;
+  loginAsGuest: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -50,20 +55,35 @@ const DEFAULT_PROFILE: Omit<UserProfile, 'uid' | 'email' | 'displayName' | 'crea
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(() => {
+    try {
+      const stored = localStorage.getItem(LOCAL_USER_STORAGE_KEY);
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [isLocalMode, setIsLocalMode] = useState<boolean>(() => {
+    return !!localStorage.getItem(LOCAL_USER_STORAGE_KEY);
+  });
   const [loading, setLoading] = useState<boolean>(true);
 
   // Listen to Auth State changes
   useEffect(() => {
+    let unsubProfile: (() => void) | null = null;
+
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
       if (user) {
+        setIsLocalMode(false);
         // Fetch or create profile doc in Firestore
         const userRef = doc(db, 'users', user.uid);
         try {
           const docSnap = await getDoc(userRef);
           if (docSnap.exists()) {
-            setUserProfile(docSnap.data() as UserProfile);
+            const prof = docSnap.data() as UserProfile;
+            setUserProfile(prof);
+            localStorage.setItem(LOCAL_USER_STORAGE_KEY, JSON.stringify(prof));
           } else {
             // Initialize new user profile document
             const newProfile: UserProfile = {
@@ -77,21 +97,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             };
             await setDoc(userRef, newProfile);
             setUserProfile(newProfile);
+            localStorage.setItem(LOCAL_USER_STORAGE_KEY, JSON.stringify(newProfile));
           }
 
           // Listen to real-time changes to user profile
-          const unsubProfile = onSnapshot(userRef, (snap) => {
+          unsubProfile = onSnapshot(userRef, (snap) => {
             if (snap.exists()) {
-              setUserProfile(snap.data() as UserProfile);
+              const prof = snap.data() as UserProfile;
+              setUserProfile(prof);
+              localStorage.setItem(LOCAL_USER_STORAGE_KEY, JSON.stringify(prof));
             }
           });
 
           setLoading(false);
-          return () => unsubProfile();
         } catch (err) {
-          console.error('Error fetching user profile from Firestore:', err);
-          // Fallback profile if Firestore is offline or restricted
-          setUserProfile({
+          console.warn('Firestore profile sync error, using cached local profile:', err);
+          const fallbackProfile: UserProfile = {
             uid: user.uid,
             email: user.email || '',
             displayName: user.displayName || 'Teacher',
@@ -99,22 +120,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             ...DEFAULT_PROFILE,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
-          });
+          };
+          setUserProfile(prev => prev || fallbackProfile);
           setLoading(false);
         }
       } else {
-        setUserProfile(null);
+        // If not logged into Firebase, check if user had an active local account
+        try {
+          const stored = localStorage.getItem(LOCAL_USER_STORAGE_KEY);
+          if (stored) {
+            setUserProfile(JSON.parse(stored));
+            setIsLocalMode(true);
+          } else {
+            setUserProfile(null);
+            setIsLocalMode(false);
+          }
+        } catch {
+          setUserProfile(null);
+        }
         setLoading(false);
       }
     });
 
-    return () => unsubscribeAuth();
+    return () => {
+      unsubscribeAuth();
+      if (unsubProfile) unsubProfile();
+    };
   }, []);
 
   const login = async (email: string, pass: string) => {
     setLoading(true);
     try {
       await signInWithEmailAndPassword(auth, email, pass);
+      setIsLocalMode(false);
+    } catch (err: any) {
+      // If Firebase failed or user previously registered locally with this email
+      const stored = localStorage.getItem(LOCAL_USER_STORAGE_KEY);
+      if (stored) {
+        const localProf: UserProfile = JSON.parse(stored);
+        if (localProf.email?.toLowerCase() === email.toLowerCase()) {
+          setUserProfile(localProf);
+          setIsLocalMode(true);
+          return;
+        }
+      }
+      throw err;
     } finally {
       setLoading(false);
     }
@@ -125,8 +175,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const cred = await createUserWithEmailAndPassword(auth, email, pass);
       if (cred.user) {
-        await updateFirebaseProfile(cred.user, { displayName });
-        const userRef = doc(db, 'users', cred.user.uid);
+        try {
+          await updateFirebaseProfile(cred.user, { displayName });
+        } catch (e) {
+          console.warn('Could not update Firebase auth display name:', e);
+        }
+
         const newProfile: UserProfile = {
           uid: cred.user.uid,
           email: cred.user.email || email,
@@ -137,12 +191,56 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
-        await setDoc(userRef, newProfile);
+
+        try {
+          const userRef = doc(db, 'users', cred.user.uid);
+          await setDoc(userRef, newProfile);
+        } catch (e) {
+          console.warn('Could not write profile to Firestore:', e);
+        }
+
         setUserProfile(newProfile);
+        localStorage.setItem(LOCAL_USER_STORAGE_KEY, JSON.stringify(newProfile));
+        setIsLocalMode(false);
       }
+    } catch (err: any) {
+      console.error('Firebase signUp error:', err);
+      // If operation is not allowed or offline, automatically allow fallback creation or throw to prompt
+      throw err;
     } finally {
       setLoading(false);
     }
+  };
+
+  const createLocalAccount = async (email: string, displayName: string, extra?: Partial<UserProfile>) => {
+    const localId = `local-teacher-${Date.now()}`;
+    const newProfile: UserProfile = {
+      uid: localId,
+      email: email || 'teacher@examcraft.dz',
+      displayName: displayName || 'Teacher',
+      ...DEFAULT_PROFILE,
+      ...extra,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    setUserProfile(newProfile);
+    setIsLocalMode(true);
+    localStorage.setItem(LOCAL_USER_STORAGE_KEY, JSON.stringify(newProfile));
+  };
+
+  const loginAsGuest = () => {
+    const guestId = `guest-teacher-${Date.now()}`;
+    const guestProfile: UserProfile = {
+      uid: guestId,
+      email: 'guest.teacher@education.dz',
+      displayName: 'Teacher Guest (CEM)',
+      ...DEFAULT_PROFILE,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    setUserProfile(guestProfile);
+    setIsLocalMode(true);
+    localStorage.setItem(LOCAL_USER_STORAGE_KEY, JSON.stringify(guestProfile));
   };
 
   const signInWithGoogle = async () => {
@@ -150,20 +248,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const res = await signInWithPopup(auth, googleProvider);
       if (res.user) {
+        setIsLocalMode(false);
         const userRef = doc(db, 'users', res.user.uid);
-        const docSnap = await getDoc(userRef);
-        if (!docSnap.exists()) {
-          const newProfile: UserProfile = {
-            uid: res.user.uid,
-            email: res.user.email || '',
-            displayName: res.user.displayName || 'Teacher',
-            photoURL: res.user.photoURL || undefined,
-            ...DEFAULT_PROFILE,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          };
-          await setDoc(userRef, newProfile);
-          setUserProfile(newProfile);
+        try {
+          const docSnap = await getDoc(userRef);
+          if (!docSnap.exists()) {
+            const newProfile: UserProfile = {
+              uid: res.user.uid,
+              email: res.user.email || '',
+              displayName: res.user.displayName || 'Teacher',
+              photoURL: res.user.photoURL || undefined,
+              ...DEFAULT_PROFILE,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            };
+            await setDoc(userRef, newProfile);
+            setUserProfile(newProfile);
+            localStorage.setItem(LOCAL_USER_STORAGE_KEY, JSON.stringify(newProfile));
+          }
+        } catch (e) {
+          console.warn('Could not sync Google user profile to Firestore:', e);
         }
       }
     } finally {
@@ -175,25 +279,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     try {
       await signOut(auth);
-      setUserProfile(null);
+    } catch (e) {
+      console.warn('SignOut warning:', e);
     } finally {
+      localStorage.removeItem(LOCAL_USER_STORAGE_KEY);
+      setUserProfile(null);
+      setIsLocalMode(false);
       setLoading(false);
     }
   };
 
   const updateUserProfile = async (data: Partial<UserProfile>) => {
-    if (!currentUser) throw new Error('Not authenticated');
+    if (!userProfile) throw new Error('Not authenticated');
     
-    const userRef = doc(db, 'users', currentUser.uid);
-    const updated = {
+    const updated: UserProfile = {
+      ...userProfile,
       ...data,
       updatedAt: new Date().toISOString()
     };
-    await updateDoc(userRef, updated);
-    setUserProfile(prev => prev ? { ...prev, ...updated } : null);
+    setUserProfile(updated);
+    localStorage.setItem(LOCAL_USER_STORAGE_KEY, JSON.stringify(updated));
 
-    if (data.displayName && data.displayName !== currentUser.displayName) {
-      await updateFirebaseProfile(currentUser, { displayName: data.displayName });
+    if (currentUser) {
+      try {
+        const userRef = doc(db, 'users', currentUser.uid);
+        await updateDoc(userRef, {
+          ...data,
+          updatedAt: new Date().toISOString()
+        });
+        if (data.displayName && data.displayName !== currentUser.displayName) {
+          await updateFirebaseProfile(currentUser, { displayName: data.displayName });
+        }
+      } catch (e) {
+        console.warn('Could not update Firestore profile:', e);
+      }
     }
   };
 
@@ -207,12 +326,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         currentUser,
         userProfile,
         loading,
+        isLocalMode,
         login,
         signUp,
         signInWithGoogle,
         logout,
         updateUserProfile,
-        sendPasswordReset
+        sendPasswordReset,
+        createLocalAccount,
+        loginAsGuest
       }}
     >
       {children}
@@ -227,3 +349,4 @@ export const useAuth = () => {
   }
   return context;
 };
+
