@@ -154,7 +154,8 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
           message: isFr ? 'Connexion réussie ! Clé valide.' : 'Connection verified! Your API key is valid and ready.'
         });
       } else {
-        throw new Error('Server returned an error');
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || (isFr ? 'Clé API invalide ou expirée.' : 'Invalid or expired API Key.'));
       }
     } catch (err: any) {
       setGeminiTestStatus({

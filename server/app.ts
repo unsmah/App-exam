@@ -7,7 +7,8 @@ import {
   executeAiAssistant,
   generateQuestionBankItems,
   generateAlternativeExamVersion,
-  importAndParseExamWithAI
+  importAndParseExamWithAI,
+  verifyGeminiApiKey
 } from './geminiService';
 import { ExamDocument, ExamTemplate, QuestionBankItem, SchoolProfile } from '../src/types';
 
@@ -36,15 +37,38 @@ const getRequestApiKey = (req: express.Request): string | undefined => {
 // ================= API ROUTES =================
 
 // Health check & verify API Key status
-app.get('/api/health', (req, res) => {
+app.get('/api/health', async (req, res) => {
   const customKey = getRequestApiKey(req);
   const serverHasKey = Boolean(process.env.GEMINI_API_KEY);
+  
+  if (customKey) {
+    try {
+      await verifyGeminiApiKey(customKey);
+      return res.json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        platform: 'ExamCraft DZ',
+        hasServerApiKey: serverHasKey,
+        hasCustomApiKey: true,
+        keyValid: true
+      });
+    } catch (err: any) {
+      console.error('Active validation of custom API Key failed:', err);
+      return res.status(400).json({
+        error: err.message || 'Invalid Gemini API key',
+        hasServerApiKey: serverHasKey,
+        hasCustomApiKey: true,
+        keyValid: false
+      });
+    }
+  }
+
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     platform: 'ExamCraft DZ',
     hasServerApiKey: serverHasKey,
-    hasCustomApiKey: Boolean(customKey)
+    hasCustomApiKey: false
   });
 });
 

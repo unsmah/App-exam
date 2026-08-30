@@ -13,6 +13,7 @@ import { CurriculumView } from './components/CurriculumView';
 import { SettingsView } from './components/SettingsView';
 import { ProfileView } from './components/ProfileView';
 import { AuthModal } from './components/AuthModal';
+import { ApiKeyModal } from './components/ApiKeyModal';
 import { AuthScreen } from './components/AuthScreen';
 import { ExamPreviewModal } from './components/ExamPreviewModal';
 import { ExamDocument, ExamTemplate, QuestionBankItem, SchoolProfile, SchoolYear } from './types';
@@ -34,6 +35,10 @@ function AppContent() {
   // Auth Modal state
   const [authModalOpen, setAuthModalOpen] = useState<boolean>(false);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'signup' | 'reset'>('login');
+
+  // API Key Modal state
+  const [apiKeyModalOpen, setApiKeyModalOpen] = useState<boolean>(false);
+  const [apiKeyModalTab, setApiKeyModalTab] = useState<'gemini' | 'supabase'>('gemini');
 
   // Core App State
   const [exams, setExams] = useState<ExamDocument[]>(INITIAL_EXAMS);
@@ -153,6 +158,11 @@ function AppContent() {
   const handleOpenAuth = (mode: 'login' | 'signup' = 'login') => {
     setAuthModalMode(mode);
     setAuthModalOpen(true);
+  };
+
+  const handleOpenApiKeyModal = (tab: 'gemini' | 'supabase' = 'gemini') => {
+    setApiKeyModalTab(tab);
+    setApiKeyModalOpen(true);
   };
 
   const handleOpenExamInEditor = (exam: ExamDocument) => {
@@ -420,6 +430,7 @@ function AppContent() {
         mobileMenuOpen={mobileMenuOpen}
         onCloseMobileMenu={() => setMobileMenuOpen(false)}
         onOpenAuthModal={handleOpenAuth}
+        onOpenApiKeyModal={handleOpenApiKeyModal}
       />
 
       {/* Mobile Drawer Overlay */}
@@ -445,6 +456,7 @@ function AppContent() {
           sidebarCollapsed={sidebarCollapsed}
           onSelectTab={setCurrentTab}
           onOpenAuthModal={handleOpenAuth}
+          onOpenApiKeyModal={handleOpenApiKeyModal}
           teacherName={activeTeacherName}
           schoolName={activeSchoolName}
         />
@@ -598,6 +610,14 @@ function AppContent() {
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
         initialMode={authModalMode}
+        lang={lang}
+      />
+
+      {/* API Key Modal */}
+      <ApiKeyModal
+        isOpen={apiKeyModalOpen}
+        onClose={() => setApiKeyModalOpen(false)}
+        initialTab={apiKeyModalTab}
         lang={lang}
       />
     </div>

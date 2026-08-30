@@ -17,6 +17,44 @@ const getAiClient = (customApiKey?: string) => {
   });
 };
 
+export async function verifyGeminiApiKey(key: string): Promise<boolean> {
+  try {
+    const ai = new GoogleGenAI({
+      apiKey: key,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build'
+        }
+      }
+    });
+    // Run a very tiny generation to verify key validity
+    await ai.models.generateContent({
+      model: 'gemini-3.7-flash',
+      contents: 'Ping',
+      config: {
+        maxOutputTokens: 1
+      }
+    });
+    return true;
+  } catch (err: any) {
+    console.error('API key verification failed:', err);
+    let errMsg = err.message || 'Invalid Gemini API key';
+    try {
+      if (typeof errMsg === 'string' && errMsg.trim().startsWith('{')) {
+        const parsed = JSON.parse(errMsg);
+        if (parsed?.error?.message) {
+          errMsg = parsed.error.message;
+        } else if (parsed?.message) {
+          errMsg = parsed.message;
+        }
+      }
+    } catch {
+      // Ignore parse failure and keep original
+    }
+    throw new Error(errMsg);
+  }
+}
+
 export async function generateExamWithGemini(config: ExamGenerationConfig, customApiKey?: string): Promise<ExamDocument> {
   const ai = getAiClient(customApiKey);
 
