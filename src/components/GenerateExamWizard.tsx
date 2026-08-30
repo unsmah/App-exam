@@ -29,6 +29,7 @@ import {
   CurriculumSequence 
 } from '../types';
 import { ALGERIAN_CURRICULUM, QUESTION_TYPES_BY_SKILL } from '../data/curriculum';
+import { apiFetch } from '../lib/api';
 
 interface GenerateExamWizardProps {
   onExamGenerated: (exam: ExamDocument) => void;
@@ -215,7 +216,7 @@ export const GenerateExamWizard: React.FC<GenerateExamWizardProps> = ({
     };
 
     try {
-      const response = await fetch('/api/generate-exam', {
+      const response = await apiFetch('/api/generate-exam', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

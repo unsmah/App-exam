@@ -13,7 +13,7 @@ import { ExamDocument, ExamTemplate, QuestionBankItem, SchoolProfile } from '../
 
 export const app = express();
 
-// In-memory store (pre-populated with Algerian curriculum mock data)
+// In-memory store
 let examsDb: ExamDocument[] = [...INITIAL_EXAMS];
 let templatesDb: ExamTemplate[] = [...INITIAL_TEMPLATES];
 let questionBankDb: QuestionBankItem[] = [...INITIAL_QUESTION_BANK];
@@ -21,11 +21,31 @@ let profileDb: SchoolProfile = { ...INITIAL_SCHOOL_PROFILE };
 
 app.use(express.json({ limit: '10mb' }));
 
+// Helper to extract custom API key
+const getRequestApiKey = (req: express.Request): string | undefined => {
+  const headerKey = req.headers['x-gemini-api-key'];
+  if (typeof headerKey === 'string' && headerKey.trim()) {
+    return headerKey.trim();
+  }
+  if (req.body && typeof req.body.apiKey === 'string' && req.body.apiKey.trim()) {
+    return req.body.apiKey.trim();
+  }
+  return undefined;
+};
+
 // ================= API ROUTES =================
 
-// Health check
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString(), platform: 'ExamCraft DZ' });
+// Health check & verify API Key status
+app.get('/api/health', (req, res) => {
+  const customKey = getRequestApiKey(req);
+  const serverHasKey = Boolean(process.env.GEMINI_API_KEY);
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    platform: 'ExamCraft DZ',
+    hasServerApiKey: serverHasKey,
+    hasCustomApiKey: Boolean(customKey)
+  });
 });
 
 // Curriculum API
@@ -154,23 +174,25 @@ app.put('/api/profile', (req, res) => {
 // AI Generation API Endpoints
 app.post('/api/generate-exam', async (req, res) => {
   try {
+    const customKey = getRequestApiKey(req);
     const config = req.body;
-    const exam = await generateExamWithGemini(config);
+    const exam = await generateExamWithGemini(config, customKey);
     // Auto save to DB
     examsDb.unshift(exam);
     res.json(exam);
   } catch (err: any) {
     console.error('Error generating exam with Gemini:', err);
     res.status(500).json({
-      error: err.message || 'Failed to generate exam. Please check server logs and try again.'
+      error: err.message || 'Failed to generate exam. Please check your Gemini API key and try again.'
     });
   }
 });
 
 app.post('/api/validate-exam', async (req, res) => {
   try {
+    const customKey = getRequestApiKey(req);
     const exam = req.body;
-    const qualityCheck = await validateExamWithAI(exam);
+    const qualityCheck = await validateExamWithAI(exam, customKey);
     res.json(qualityCheck);
   } catch (err: any) {
     console.error('Error validating exam:', err);
@@ -180,8 +202,9 @@ app.post('/api/validate-exam', async (req, res) => {
 
 app.post('/api/ai-assistant', async (req, res) => {
   try {
+    const customKey = getRequestApiKey(req);
     const { action, payload } = req.body;
-    const result = await executeAiAssistant(action, payload);
+    const result = await executeAiAssistant(action, payload, customKey);
     res.json(result);
   } catch (err: any) {
     console.error('Error in AI Assistant:', err);
@@ -191,8 +214,9 @@ app.post('/api/ai-assistant', async (req, res) => {
 
 app.post('/api/generate-questions', async (req, res) => {
   try {
+    const customKey = getRequestApiKey(req);
     const params = req.body;
-    const items = await generateQuestionBankItems(params);
+    const items = await generateQuestionBankItems(params, customKey);
     // Add to DB
     questionBankDb = [...items, ...questionBankDb];
     res.json(items);
@@ -204,8 +228,9 @@ app.post('/api/generate-questions', async (req, res) => {
 
 app.post('/api/generate-alternative-version', async (req, res) => {
   try {
+    const customKey = getRequestApiKey(req);
     const { exam } = req.body;
-    const altExam = await generateAlternativeExamVersion(exam);
+    const altExam = await generateAlternativeExamVersion(exam, customKey);
     examsDb.unshift(altExam);
     res.json(altExam);
   } catch (err: any) {
@@ -216,8 +241,9 @@ app.post('/api/generate-alternative-version', async (req, res) => {
 
 app.post('/api/import-exam', async (req, res) => {
   try {
+    const customKey = getRequestApiKey(req);
     const { text } = req.body;
-    const importedExam = await importAndParseExamWithAI(text);
+    const importedExam = await importAndParseExamWithAI(text, customKey);
     examsDb.unshift(importedExam);
     res.json(importedExam);
   } catch (err: any) {

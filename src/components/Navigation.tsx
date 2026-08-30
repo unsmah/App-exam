@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, 
   Sparkles, 
@@ -26,11 +26,15 @@ import {
   PanelLeftOpen,
   LogIn,
   LogOut,
-  UserCheck
+  UserCheck,
+  Key,
+  Database
 } from 'lucide-react';
 import { SchoolYear } from '../types';
 import { UserAccountMenu } from './UserAccountMenu';
 import { useAuth } from '../context/AuthContext';
+import { ApiKeyManager } from '../lib/apiKeyManager';
+import { isSupabaseConfigured } from '../lib/supabase';
 
 export const Sidebar: React.FC<{
   currentTab: string;
@@ -43,6 +47,7 @@ export const Sidebar: React.FC<{
   mobileMenuOpen: boolean;
   onCloseMobileMenu: () => void;
   onOpenAuthModal: (mode?: 'login' | 'signup') => void;
+  onOpenApiKeyModal: (tab?: 'gemini' | 'supabase') => void;
 }> = ({ 
   currentTab, 
   onSelectTab, 
@@ -53,10 +58,18 @@ export const Sidebar: React.FC<{
   onToggleCollapse,
   mobileMenuOpen,
   onCloseMobileMenu,
-  onOpenAuthModal
+  onOpenAuthModal,
+  onOpenApiKeyModal
 }) => {
   const isFr = lang === 'fr';
   const { currentUser, userProfile, logout } = useAuth();
+  const [hasApiKey, setHasApiKey] = useState(ApiKeyManager.hasGeminiKey());
+
+  useEffect(() => {
+    const handleKeyChange = () => setHasApiKey(ApiKeyManager.hasGeminiKey());
+    window.addEventListener('examcraft-api-key-changed', handleKeyChange);
+    return () => window.removeEventListener('examcraft-api-key-changed', handleKeyChange);
+  }, []);
 
   const menuItems = [
     { id: 'dashboard', labelEn: 'Dashboard', labelFr: 'Tableau de bord', icon: LayoutDashboard },
@@ -100,102 +113,106 @@ export const Sidebar: React.FC<{
           </div>
         ) : (
           <div 
-            className="w-full flex items-center justify-center cursor-pointer"
+            className="w-10 h-10 mx-auto rounded-lg bg-emerald-600 flex items-center justify-center text-white shadow-md cursor-pointer" 
             onClick={() => onSelectTab('dashboard')}
             title="ExamCraft DZ"
           >
-            <div className="w-9 h-9 rounded-lg bg-emerald-600 flex items-center justify-center text-white shadow-md shadow-emerald-900/30">
-              <GraduationCap className="w-5 h-5" />
-            </div>
+            <GraduationCap className="w-6 h-6" />
           </div>
         )}
 
-        {/* Desktop Collapse Button */}
-        <button
-          onClick={onToggleCollapse}
-          className="hidden lg:flex p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-          title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        >
-          {isCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
-        </button>
-
-        {/* Mobile Close Button */}
-        <button
+        {/* Mobile close button */}
+        <button 
           onClick={onCloseMobileMenu}
-          className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
-          title="Close menu"
+          className="lg:hidden p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
         >
           <X className="w-5 h-5" />
         </button>
       </div>
 
-      {/* Quick Action Button */}
+      {/* Action Button: Fast New Exam */}
       <div className="p-3">
         <button
-          onClick={onNewExam}
-          className={`w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2.5 rounded-lg shadow-sm transition-all text-sm group ${
-            isCollapsed ? 'px-2' : 'px-4'
+          onClick={() => {
+            onNewExam();
+            onCloseMobileMenu();
+          }}
+          className={`w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40 transition-all ${
+            isCollapsed ? 'px-0' : ''
           }`}
-          title={isCollapsed ? (isFr ? 'Nouveau Sujet' : 'Create New Exam') : undefined}
+          title="Create New Exam"
         >
-          <Plus className="w-4 h-4 transition-transform group-hover:rotate-90 shrink-0" />
-          {!isCollapsed && <span className="truncate">{isFr ? 'Nouveau Sujet (IA)' : 'Create New Exam'}</span>}
+          <Plus className="w-4 h-4" />
+          {!isCollapsed && <span className="text-xs">{isFr ? 'Nouveau Sujet' : 'New Exam'}</span>}
         </button>
       </div>
 
       {/* Navigation Links */}
-      <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto overflow-x-hidden">
-        {!isCollapsed && (
-          <div className="px-3 py-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider truncate">
-            {isFr ? 'Espace Enseignant' : 'Teacher Workspace'}
-          </div>
-        )}
-        {menuItems.map(item => {
+      <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-1">
+        {menuItems.map((item) => {
           const Icon = item.icon;
           const isActive = currentTab === item.id;
-          const label = isFr ? item.labelFr : item.labelEn;
 
           return (
             <button
               key={item.id}
-              onClick={() => onSelectTab(item.id)}
-              title={isCollapsed ? label : undefined}
-              className={`w-full flex items-center ${isCollapsed ? 'justify-center px-2 py-2.5' : 'justify-between px-3 py-2'} rounded-lg text-sm transition-colors relative group ${
+              onClick={() => {
+                onSelectTab(item.id);
+                onCloseMobileMenu();
+              }}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-xs transition-all relative ${
                 isActive
-                  ? 'bg-emerald-500/15 text-emerald-400 font-semibold border border-emerald-500/20'
-                  : 'text-slate-300 hover:bg-slate-800/70 hover:text-slate-100'
-              }`}
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/60'
+              } ${isCollapsed ? 'justify-center px-0' : ''}`}
+              title={isFr ? item.labelFr : item.labelEn}
             >
-              <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 truncate'}`}>
-                <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-emerald-400' : 'text-slate-400'}`} />
-                {!isCollapsed && <span className="truncate">{label}</span>}
-              </div>
+              <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+              
+              {!isCollapsed && (
+                <span className="truncate flex-1 text-left">
+                  {isFr ? item.labelFr : item.labelEn}
+                </span>
+              )}
 
               {!isCollapsed && item.badge && (
-                <span className="text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded shrink-0">
+                <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                   {item.badge}
                 </span>
               )}
-              {!isCollapsed && item.count !== undefined && (
-                <span className="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full font-mono shrink-0">
+
+              {!isCollapsed && typeof item.count === 'number' && (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
                   {item.count}
                 </span>
-              )}
-
-              {/* Floating Tooltip when collapsed */}
-              {isCollapsed && (
-                <div className="fixed left-20 ml-2 hidden group-hover:flex items-center z-50 bg-slate-800 text-white text-xs font-semibold px-2.5 py-1.5 rounded-md shadow-lg border border-slate-700 whitespace-nowrap pointer-events-none">
-                  {label}
-                  {item.badge && (
-                    <span className="ml-1.5 text-[10px] bg-emerald-500/20 text-emerald-300 px-1 rounded">
-                      {item.badge}
-                    </span>
-                  )}
-                </div>
               )}
             </button>
           );
         })}
+
+        {/* API Key / Cloud Config shortcut */}
+        <button
+          onClick={() => {
+            onOpenApiKeyModal('gemini');
+            onCloseMobileMenu();
+          }}
+          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-xs transition-all text-slate-400 hover:text-slate-100 hover:bg-slate-800/60 ${
+            isCollapsed ? 'justify-center px-0' : ''
+          }`}
+          title={isFr ? 'Clés API & Base de données' : 'API Key & Cloud Config'}
+        >
+          <Key className="w-4 h-4 text-emerald-400 shrink-0" />
+          {!isCollapsed && (
+            <div className="flex-1 text-left flex items-center justify-between">
+              <span>{isFr ? 'Clé API & Cloud' : 'API Key & Cloud'}</span>
+              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                hasApiKey ? 'bg-emerald-950 text-emerald-400 border border-emerald-500/30' : 'bg-amber-950 text-amber-300 border border-amber-500/30'
+              }`}>
+                {hasApiKey ? 'Ready' : 'Setup'}
+              </span>
+            </div>
+          )}
+        </button>
       </nav>
 
       {/* User Account Bar at bottom of Sidebar */}
@@ -254,6 +271,7 @@ export const Header: React.FC<{
   sidebarCollapsed?: boolean;
   onSelectTab: (tab: string) => void;
   onOpenAuthModal: (mode?: 'login' | 'signup') => void;
+  onOpenApiKeyModal: (tab?: 'gemini' | 'supabase') => void;
   teacherName?: string;
   schoolName?: string;
 }> = ({
@@ -267,6 +285,7 @@ export const Header: React.FC<{
   sidebarCollapsed = false,
   onSelectTab,
   onOpenAuthModal,
+  onOpenApiKeyModal,
   teacherName = 'Teacher Benali',
   schoolName = 'Emir Abdelkader Middle School'
 }) => {
@@ -301,7 +320,7 @@ export const Header: React.FC<{
 
       <div className="flex items-center gap-3">
         {/* Search */}
-        <div className="relative hidden md:block w-56 lg:w-64">
+        <div className="relative hidden md:block w-52 lg:w-60">
           <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
           <input
             type="text"
@@ -322,11 +341,12 @@ export const Header: React.FC<{
           <span>{lang.toUpperCase()}</span>
         </button>
 
-        {/* User Account Menu with Avatar Dropdown */}
+        {/* User Account Menu with Avatar Dropdown & Quick AI Key */}
         <UserAccountMenu
           onOpenProfile={() => onSelectTab('profile')}
           onOpenSettings={() => onSelectTab('settings')}
           onOpenAuth={onOpenAuthModal}
+          onOpenApiKeyModal={onOpenApiKeyModal}
           lang={lang}
         />
       </div>

@@ -21,6 +21,7 @@ import {
   List
 } from 'lucide-react';
 import { ExamDocument, SchoolYear, ExamType } from '../types';
+import { apiFetch } from '../lib/api';
 
 interface ArchiveViewProps {
   exams: ExamDocument[];
@@ -79,7 +80,7 @@ export const ArchiveView: React.FC<ArchiveViewProps> = ({
     setImportLoading(true);
     setImportError(null);
     try {
-      const res = await fetch('/api/import-exam', {
+      const res = await apiFetch('/api/import-exam', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: importText })

@@ -26,6 +26,7 @@ import {
   Maximize2
 } from 'lucide-react';
 import { ExamDocument, ExamSection, ExamQuestion, WritingTask, QuestionType } from '../types';
+import { apiFetch } from '../lib/api';
 
 interface ExamEditorProps {
   exam: ExamDocument;
@@ -299,7 +300,7 @@ export const ExamEditor: React.FC<ExamEditorProps> = ({
     if (!aiTarget) return;
     setAiLoading(true);
     try {
-      const response = await fetch('/api/ai-assistant', {
+      const response = await apiFetch('/api/ai-assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

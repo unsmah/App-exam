@@ -2,10 +2,10 @@ import { GoogleGenAI, Type } from '@google/genai';
 import { ExamGenerationConfig, ExamDocument, AIQualityCheck, QuestionBankItem, SchoolYear } from '../src/types';
 import { ALGERIAN_CURRICULUM } from '../src/data/curriculum';
 
-const getAiClient = () => {
-  const apiKey = process.env.GEMINI_API_KEY;
+const getAiClient = (customApiKey?: string) => {
+  const apiKey = customApiKey?.trim() || process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error('GEMINI_API_KEY environment variable is not set');
+    throw new Error('No Gemini API key found. Please enter your Google AI Studio API key in the AI Key Settings at the top of the screen (free at https://aistudio.google.com/app/apikey).');
   }
   return new GoogleGenAI({
     apiKey,
@@ -17,8 +17,8 @@ const getAiClient = () => {
   });
 };
 
-export async function generateExamWithGemini(config: ExamGenerationConfig): Promise<ExamDocument> {
-  const ai = getAiClient();
+export async function generateExamWithGemini(config: ExamGenerationConfig, customApiKey?: string): Promise<ExamDocument> {
+  const ai = getAiClient(customApiKey);
 
   // Find curriculum context
   const curSeq = ALGERIAN_CURRICULUM.find(s => s.id === config.sequenceId) || 
@@ -63,12 +63,11 @@ CRITICAL ASSESSMENT RULES:
 
 Generate:
 1. Descriptive Exam Title and header data.
-2. An engaging, age-appropriate reading passage with a clear title and source.
-3. Reading comprehension section activities matching the requested types.
-4. Mastery of Language section activities (Grammar tense conjugation, sentence transformations, lexis synonyms/antonyms, and phonetics/pronunciation classification).
-5. Part Two: Situation of Integration (Written Expression) with prompt, context, 4-6 bulleted cues/guidelines, target word count, and a structured 4-criterion grading rubric.
-6. Clear, unambiguous answers for each question.
-Ensure total points = ${config.totalPoints}.`;
+2. An engaging, grade-appropriate reading passage with a clear title and simulated authentic source (adapted from educational magazines or youth books).
+3. Section 1 (Reading Comprehension) with 2-3 structured activities totaling ${config.readingPoints} points.
+4. Section 2 (Mastery of Language) with 2-3 structured activities (Grammar, Morphology, Phonetics / Pronunciation) totaling ${config.languagePoints} points.
+5. Situation of Integration (Written Expression) totaling ${config.writingPoints} points, featuring a clear realistic scenario, task instructions, 3-4 bulleted cues, and an Algerian-standard 3-4 criterion grading rubric (Relevance, Linguistic Resources, Coherence, Organization).
+6. Comprehensive, unambiguous Answer Key with full explanations.`;
 
   const response = await ai.models.generateContent({
     model: 'gemini-3.7-flash',
@@ -80,16 +79,9 @@ Ensure total points = ${config.totalPoints}.`;
       responseSchema: {
         type: Type.OBJECT,
         properties: {
-          title: { type: Type.STRING, description: 'Exam Title (e.g., First Term English Exam)' },
-          schoolYear: { type: Type.STRING },
-          sequence: { type: Type.STRING },
+          title: { type: Type.STRING },
           unitTitle: { type: Type.STRING },
           theme: { type: Type.STRING },
-          examType: { type: Type.STRING },
-          durationMinutes: { type: Type.INTEGER },
-          totalPoints: { type: Type.NUMBER },
-          difficulty: { type: Type.STRING },
-          targetCEFR: { type: Type.STRING },
           instructions: { type: Type.STRING },
           headerConfig: {
             type: Type.OBJECT,
@@ -107,7 +99,18 @@ Ensure total points = ${config.totalPoints}.`;
               datePlaceholder: { type: Type.STRING },
               studentNamePlaceholder: { type: Type.STRING }
             },
-            required: ['republicTitle', 'ministryTitle', 'schoolName', 'classGrade', 'academicYear', 'examTitle', 'durationMinutes', 'totalPoints', 'studentNamePlaceholder']
+            required: [
+              'republicTitle',
+              'ministryTitle',
+              'schoolName',
+              'wilaya',
+              'teacherName',
+              'classGrade',
+              'academicYear',
+              'examTitle',
+              'durationMinutes',
+              'totalPoints'
+            ]
           },
           sections: {
             type: Type.ARRAY,
@@ -128,16 +131,13 @@ Ensure total points = ${config.totalPoints}.`;
                     type: Type.OBJECT,
                     properties: {
                       id: { type: Type.STRING },
-                      sectionId: { type: Type.STRING },
                       type: { type: Type.STRING },
                       instruction: { type: Type.STRING },
                       question: { type: Type.STRING },
                       options: { type: Type.ARRAY, items: { type: Type.STRING } },
                       points: { type: Type.NUMBER },
                       answer: { type: Type.STRING },
-                      alternativeAnswers: { type: Type.ARRAY, items: { type: Type.STRING } },
-                      explanation: { type: Type.STRING },
-                      difficulty: { type: Type.STRING }
+                      explanation: { type: Type.STRING }
                     },
                     required: ['id', 'type', 'instruction', 'question', 'points', 'answer']
                   }
@@ -169,134 +169,100 @@ Ensure total points = ${config.totalPoints}.`;
               }
             },
             required: ['title', 'prompt', 'cues', 'points', 'rubric']
-          },
-          qualityScore: {
-            type: Type.OBJECT,
-            properties: {
-              score: { type: Type.NUMBER },
-              curriculumAlignment: { type: Type.BOOLEAN },
-              scoreMatch: { type: Type.BOOLEAN },
-              feedback: { type: Type.ARRAY, items: { type: Type.STRING } },
-              strengths: { type: Type.ARRAY, items: { type: Type.STRING } },
-              suggestions: { type: Type.ARRAY, items: { type: Type.STRING } }
-            },
-            required: ['score', 'curriculumAlignment', 'scoreMatch', 'feedback', 'strengths', 'suggestions']
           }
         },
-        required: ['title', 'schoolYear', 'sequence', 'theme', 'examType', 'durationMinutes', 'totalPoints', 'instructions', 'headerConfig', 'sections', 'writingTask', 'qualityScore']
+        required: ['title', 'unitTitle', 'theme', 'instructions', 'headerConfig', 'sections', 'writingTask']
       }
     }
   });
 
-  const rawText = response.text || '{}';
-  const parsed = JSON.parse(rawText);
-
-  // Generate unique IDs if missing
-  const examId = `exam-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+  const parsed = JSON.parse(response.text || '{}');
   const now = new Date().toISOString();
 
-  const formattedExam: ExamDocument = {
-    id: examId,
-    title: parsed.title || `${config.schoolYear} English Examination`,
+  const generatedExam: ExamDocument = {
+    id: `exam-${Date.now()}`,
+    title: parsed.title || `${config.schoolYear} English ${config.examType} - ${config.theme}`,
     schoolYear: config.schoolYear,
-    sequence: parsed.sequence || curSeq.sequenceTitle,
-    unitTitle: parsed.unitTitle || curSeq.theme,
-    theme: parsed.theme || config.theme || curSeq.theme,
+    sequence: curSeq.sequenceTitle,
+    unitTitle: parsed.unitTitle || config.theme,
+    theme: parsed.theme || config.theme,
     examType: config.examType,
     durationMinutes: config.durationMinutes,
     totalPoints: config.totalPoints,
     difficulty: config.difficulty,
     targetCEFR: config.targetCEFR || 'A2',
-    status: 'Completed',
+    status: 'Final',
     instructions: parsed.instructions || 'Read the text carefully and answer all questions.',
     headerConfig: {
       republicTitle: parsed.headerConfig?.republicTitle || "PEOPLE'S DEMOCRATIC REPUBLIC OF ALGERIA",
       ministryTitle: parsed.headerConfig?.ministryTitle || 'MINISTRY OF NATIONAL EDUCATION',
-      schoolName: parsed.headerConfig?.schoolName || 'Middle School',
-      wilaya: parsed.headerConfig?.wilaya || 'Direction of Education',
+      schoolName: parsed.headerConfig?.schoolName || 'CEM Emir Abdelkader',
+      wilaya: parsed.headerConfig?.wilaya || 'Direction of Education - Alger Centre',
       teacherName: parsed.headerConfig?.teacherName || 'Teacher',
       classGrade: parsed.headerConfig?.classGrade || `Level: ${config.schoolYear}`,
       academicYear: parsed.headerConfig?.academicYear || '2026–2027',
-      examTitle: parsed.headerConfig?.examTitle || parsed.title || 'English Examination',
+      examTitle: parsed.headerConfig?.examTitle || parsed.title || 'First Term English Exam',
       durationMinutes: config.durationMinutes,
       totalPoints: config.totalPoints,
-      datePlaceholder: parsed.headerConfig?.datePlaceholder || 'Academic Year 2026–2027',
-      studentNamePlaceholder: parsed.headerConfig?.studentNamePlaceholder || `Full Name: .....................................................   Class: ${config.schoolYear} ...`
+      datePlaceholder: '2026–2027',
+      studentNamePlaceholder: `Full Name: .....................................................   Class: ${config.schoolYear} ...`
     },
-    sections: parsed.sections.map((sec: any, sIdx: number) => ({
+    sections: (parsed.sections || []).map((sec: any, sIdx: number) => ({
       id: sec.id || `sec-${sIdx + 1}`,
-      title: sec.title || `Section ${sIdx + 1}`,
-      instruction: sec.instruction || '',
+      title: sec.title || `PART ONE: SECTION ${sIdx + 1}`,
+      instruction: sec.instruction || 'Answer the following activities.',
       type: sec.type || (sIdx === 0 ? 'reading' : 'language'),
       passageTitle: sec.passageTitle,
       passage: sec.passage,
       passageSource: sec.passageSource,
-      points: Number(sec.points) || 7,
+      points: Number(sec.points) || (sIdx === 0 ? config.readingPoints : config.languagePoints),
       questions: (sec.questions || []).map((q: any, qIdx: number) => ({
         id: q.id || `q-${sIdx + 1}-${qIdx + 1}`,
         sectionId: sec.id || `sec-${sIdx + 1}`,
         type: q.type || 'wh_questions',
-        instruction: q.instruction || '',
+        instruction: q.instruction || `Activity ${qIdx + 1}:`,
         question: q.question || '',
         options: q.options || [],
         points: Number(q.points) || 1,
         answer: q.answer || '',
-        alternativeAnswers: q.alternativeAnswers || [],
         explanation: q.explanation || '',
-        difficulty: q.difficulty || config.difficulty
+        difficulty: config.difficulty
       }))
     })),
     writingTask: {
-      title: parsed.writingTask?.title || 'PART TWO: SITUATION OF INTEGRATION (Written Expression)',
-      prompt: parsed.writingTask?.prompt || 'Write a short paragraph about the topic.',
+      title: parsed.writingTask?.title || 'PART TWO: SITUATION OF INTEGRATION (WRITTEN EXPRESSION)',
+      prompt: parsed.writingTask?.prompt || 'Write a short composition applying the sequence communicative competencies.',
       context: parsed.writingTask?.context || '',
-      cues: parsed.writingTask?.cues || ['Use proper capitalization and punctuation', 'Organize ideas chronologically'],
-      wordCountTarget: parsed.writingTask?.wordCountTarget || '50-70 words',
-      points: Number(parsed.writingTask?.points) || config.writingPoints || 6,
+      cues: parsed.writingTask?.cues || ['Introduction', 'Body paragraph with details', 'Conclusion'],
+      wordCountTarget: parsed.writingTask?.wordCountTarget || (config.schoolYear === '1AM' ? '40-60 words' : config.schoolYear === '4AM' ? '80-120 words' : '60-80 words'),
+      points: Number(parsed.writingTask?.points) || config.writingPoints,
       rubric: parsed.writingTask?.rubric || [
-        { criterion: 'Relevance to topic', points: 2 },
-        { criterion: 'Syntactic and morphological accuracy', points: 2 },
-        { criterion: 'Coherence and organization', points: 2 }
+        { criterion: 'Relevance to the topic and format', points: 2 },
+        { criterion: 'Use of appropriate linguistic resources (grammar & vocabulary)', points: 2 },
+        { criterion: 'Coherence and organization of ideas', points: 1 },
+        { criterion: 'Creativity, neatness, and punctuation', points: 1 }
       ]
     },
-    qualityCheck: parsed.qualityScore || {
-      score: 95,
-      curriculumAlignment: true,
-      scoreMatch: true,
-      feedback: ['Exam meets Algerian Middle School guidelines.'],
-      strengths: ['Clear question wording', 'Aligned with sequence objectives'],
-      suggestions: []
-    },
     versionNumber: 1,
-    versionsHistory: [
-      {
-        versionNumber: 1,
-        timestamp: now,
-        note: 'AI Generated initial version',
-        sections: [],
-        writingTask: {} as any,
-        headerConfig: {} as any
-      }
-    ],
-    tags: [config.schoolYear, config.examType, config.theme || 'English'],
+    versionsHistory: [],
+    tags: [config.schoolYear, config.examType, config.theme, 'Official Standard'],
     createdAt: now,
     updatedAt: now
   };
 
-  return formattedExam;
+  return generatedExam;
 }
 
-export async function validateExamWithAI(exam: ExamDocument): Promise<AIQualityCheck> {
-  const ai = getAiClient();
+export async function validateExamWithAI(exam: ExamDocument, customApiKey?: string): Promise<AIQualityCheck> {
+  const ai = getAiClient(customApiKey);
 
-  const prompt = `You are a Senior Inspector of English for the Algerian Ministry of National Education.
-Evaluate the following middle school English exam:
-Year: ${exam.schoolYear}
-Sequence: ${exam.sequence}
-Theme: ${exam.theme}
-Total Target Points: ${exam.totalPoints}
+  const prompt = `You are a Senior Inspector of English for Algerian Middle Schools.
+Review and validate this examination for ${exam.schoolYear} level:
 
-EXAM CONTENT:
+Title: ${exam.title}
+Level: ${exam.schoolYear}
+Target Points: ${exam.totalPoints} pts
+Exam Data:
 ${JSON.stringify({
   instructions: exam.instructions,
   sections: exam.sections,
@@ -334,14 +300,18 @@ Provide an honest, expert assessment checking:
   return JSON.parse(response.text || '{}');
 }
 
-export async function executeAiAssistant(action: string, payload: {
-  text: string;
-  context?: string;
-  schoolYear?: SchoolYear;
-  questionType?: string;
-  targetYear?: SchoolYear;
-}): Promise<{ result: string; alternatives?: string[] }> {
-  const ai = getAiClient();
+export async function executeAiAssistant(
+  action: string,
+  payload: {
+    text: string;
+    context?: string;
+    schoolYear?: SchoolYear;
+    questionType?: string;
+    targetYear?: SchoolYear;
+  },
+  customApiKey?: string
+): Promise<{ result: string; alternatives?: string[] }> {
+  const ai = getAiClient(customApiKey);
 
   let prompt = '';
   switch (action) {
@@ -391,15 +361,18 @@ export async function executeAiAssistant(action: string, payload: {
   return { result: textOutput };
 }
 
-export async function generateQuestionBankItems(params: {
-  schoolYear: SchoolYear;
-  unit: string;
-  theme: string;
-  grammar?: string;
-  skill: string;
-  count: number;
-}): Promise<QuestionBankItem[]> {
-  const ai = getAiClient();
+export async function generateQuestionBankItems(
+  params: {
+    schoolYear: SchoolYear;
+    unit: string;
+    theme: string;
+    grammar?: string;
+    skill: string;
+    count: number;
+  },
+  customApiKey?: string
+): Promise<QuestionBankItem[]> {
+  const ai = getAiClient(customApiKey);
 
   const prompt = `Generate ${params.count || 10} high-quality, reusable English exam questions/exercises tailored for Algerian ${params.schoolYear} middle school pupils.
 Unit/Sequence: ${params.unit}
@@ -454,27 +427,8 @@ Return valid JSON with an array of questions. Each question must include instruc
   }));
 }
 
-export async function generateAlternativeExamVersion(originalExam: ExamDocument): Promise<ExamDocument> {
-  const ai = getAiClient();
-
-  const prompt = `You are an expert Algerian English exam author.
-Create an ALTERNATIVE PARALLEL VERSION (Version B) of this exam.
-It must test the EXACT SAME grammatical objectives, curriculum unit, vocabulary level, question types, and point distribution, but with a FRESH, DIFFERENT reading passage and DIFFERENT question items so students cannot copy.
-
-ORIGINAL EXAM:
-Title: ${originalExam.title}
-Year: ${originalExam.schoolYear}
-Unit: ${originalExam.sequence} - ${originalExam.theme}
-Points: ${originalExam.totalPoints} pts
-Sections & Questions: ${JSON.stringify(originalExam.sections)}
-Writing Task: ${JSON.stringify(originalExam.writingTask)}
-
-Return a complete structured JSON matching the same schema with:
-- A new reading text on the same topic/theme
-- Parallel questions testing the same rules
-- Fresh writing task cues
-- Complete answer key
-- Same total score: ${originalExam.totalPoints} pts`;
+export async function generateAlternativeExamVersion(originalExam: ExamDocument, customApiKey?: string): Promise<ExamDocument> {
+  const ai = getAiClient(customApiKey);
 
   const config: ExamGenerationConfig = {
     schoolYear: originalExam.schoolYear,
@@ -500,14 +454,14 @@ Return a complete structured JSON matching the same schema with:
     customInstructions: `Create an alternative Version B of: ${originalExam.title}. Different text and fresh questions on the same theme: ${originalExam.theme}`
   };
 
-  const newExam = await generateExamWithGemini(config);
+  const newExam = await generateExamWithGemini(config, customApiKey);
   newExam.title = `${originalExam.title} (Version B)`;
   newExam.tags = [...originalExam.tags, 'Version B'];
   return newExam;
 }
 
-export async function importAndParseExamWithAI(rawText: string): Promise<ExamDocument> {
-  const ai = getAiClient();
+export async function importAndParseExamWithAI(rawText: string, customApiKey?: string): Promise<ExamDocument> {
+  const ai = getAiClient(customApiKey);
 
   const prompt = `Parse the following raw text or pasted English exam document and structure it into the standardized Algerian Middle School exam format.
 Analyze the school year (1AM, 2AM, 3AM, or 4AM), extract the reading passage, all question activities with instructions and points, and the writing task.

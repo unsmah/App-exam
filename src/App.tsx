@@ -20,6 +20,7 @@ import { INITIAL_EXAMS, INITIAL_TEMPLATES, INITIAL_QUESTION_BANK, INITIAL_SCHOOL
 import { exportExamToDocx } from './utils/docxExport';
 import { printExamDocument } from './utils/printExport';
 import { UserDataService } from './lib/userDataService';
+import { apiFetch } from './lib/api';
 
 function AppContent() {
   const { currentUser, userProfile, updateUserProfile, loading } = useAuth();
@@ -110,10 +111,10 @@ function AppContent() {
         // Guest or fallback mode: load from API or initial mock data
         try {
           const [examsRes, tmplRes, qbRes, profRes] = await Promise.all([
-            fetch('/api/exams'),
-            fetch('/api/templates'),
-            fetch('/api/question-bank'),
-            fetch('/api/profile')
+            apiFetch('/api/exams'),
+            apiFetch('/api/templates'),
+            apiFetch('/api/question-bank'),
+            apiFetch('/api/profile')
           ]);
 
           if (examsRes.ok) {
@@ -200,7 +201,7 @@ function AppContent() {
 
     // Update backend
     try {
-      await fetch(`/api/exams/${updatedExam.id}`, {
+      await apiFetch(`/api/exams/${updatedExam.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedExam)
@@ -227,7 +228,7 @@ function AppContent() {
     }
 
     try {
-      await fetch('/api/exams', {
+      await apiFetch('/api/exams', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(duplicated)
@@ -239,7 +240,7 @@ function AppContent() {
 
   const handleGenerateAlternative = async (exam: ExamDocument) => {
     try {
-      const res = await fetch('/api/generate-alternative-version', {
+      const res = await apiFetch('/api/generate-alternative-version', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ exam })
@@ -268,7 +269,7 @@ function AppContent() {
       }
 
       try {
-        await fetch(`/api/exams/${id}`, { method: 'DELETE' });
+        await apiFetch(`/api/exams/${id}`, { method: 'DELETE' });
       } catch (err) {
         console.error(err);
       }
@@ -308,7 +309,7 @@ function AppContent() {
     }
 
     try {
-      await fetch('/api/question-bank', {
+      await apiFetch('/api/question-bank', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newItem)
@@ -326,7 +327,7 @@ function AppContent() {
     }
 
     try {
-      await fetch(`/api/question-bank/${id}`, { method: 'DELETE' });
+      await apiFetch(`/api/question-bank/${id}`, { method: 'DELETE' });
     } catch (err) {
       console.error(err);
     }
@@ -347,7 +348,7 @@ function AppContent() {
     }
 
     try {
-      await fetch('/api/profile', {
+      await apiFetch('/api/profile', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedProfile)
