@@ -16,7 +16,6 @@ import {
 } from 'lucide-react';
 import { QuestionBankItem, SchoolYear, QuestionType } from '../types';
 import { ALGERIAN_CURRICULUM } from '../data/curriculum';
-import { GeminiClientService } from '../lib/geminiClientService';
 
 interface QuestionBankViewProps {
   items: QuestionBankItem[];
@@ -97,13 +96,19 @@ export const QuestionBankView: React.FC<QuestionBankViewProps> = ({
   const handleRunAiGenerator = async () => {
     setGenLoading(true);
     try {
-      const generatedList = await GeminiClientService.generateQuestionBankItems({
-        schoolYear: genYear,
-        theme: genTheme,
-        grammar: genGrammar,
-        skill: genSkill,
-        count: genCount
+      const res = await fetch('/api/generate-questions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          schoolYear: genYear,
+          theme: genTheme,
+          grammar: genGrammar,
+          skill: genSkill,
+          count: genCount
+        })
       });
+      if (!res.ok) throw new Error('Generation failed');
+      const generatedList: QuestionBankItem[] = await res.json();
       generatedList.forEach(item => onAddItem(item));
       setGeneratorOpen(false);
     } catch (err) {

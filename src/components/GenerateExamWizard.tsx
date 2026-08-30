@@ -29,7 +29,6 @@ import {
   CurriculumSequence 
 } from '../types';
 import { ALGERIAN_CURRICULUM, QUESTION_TYPES_BY_SKILL } from '../data/curriculum';
-import { GeminiClientService } from '../lib/geminiClientService';
 
 interface GenerateExamWizardProps {
   onExamGenerated: (exam: ExamDocument) => void;
@@ -216,7 +215,18 @@ export const GenerateExamWizard: React.FC<GenerateExamWizardProps> = ({
     };
 
     try {
-      const examData = await GeminiClientService.generateExam(payload);
+      const response = await fetch('/api/generate-exam', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Server error generating exam');
+      }
+
+      const examData: ExamDocument = await response.json();
       clearInterval(stepInterval);
       setGeneratedExam(examData);
       setStep(6);

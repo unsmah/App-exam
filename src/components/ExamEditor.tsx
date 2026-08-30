@@ -26,7 +26,6 @@ import {
   Maximize2
 } from 'lucide-react';
 import { ExamDocument, ExamSection, ExamQuestion, WritingTask, QuestionType } from '../types';
-import { GeminiClientService } from '../lib/geminiClientService';
 
 interface ExamEditorProps {
   exam: ExamDocument;
@@ -300,11 +299,19 @@ export const ExamEditor: React.FC<ExamEditorProps> = ({
     if (!aiTarget) return;
     setAiLoading(true);
     try {
-      const data = await GeminiClientService.executeAiAssistant(aiAction, {
-        text: aiTarget.currentText,
-        schoolYear: currentExam.schoolYear,
-        questionType: aiTarget.questionType
+      const response = await fetch('/api/ai-assistant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: aiAction,
+          payload: {
+            text: aiTarget.currentText,
+            schoolYear: currentExam.schoolYear,
+            questionType: aiTarget.questionType
+          }
+        })
       });
+      const data = await response.json();
       setAiResult(data.result || '');
       if (data.alternatives) {
         setAiAlternatives(data.alternatives);

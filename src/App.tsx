@@ -20,7 +20,6 @@ import { INITIAL_EXAMS, INITIAL_TEMPLATES, INITIAL_QUESTION_BANK, INITIAL_SCHOOL
 import { exportExamToDocx } from './utils/docxExport';
 import { printExamDocument } from './utils/printExport';
 import { UserDataService } from './lib/userDataService';
-import { GeminiClientService } from './lib/geminiClientService';
 
 function AppContent() {
   const { currentUser, userProfile, updateUserProfile, loading } = useAuth();
@@ -240,13 +239,20 @@ function AppContent() {
 
   const handleGenerateAlternative = async (exam: ExamDocument) => {
     try {
-      const altExam = await GeminiClientService.generateAlternativeVersion(exam);
-      setExams(prev => [altExam, ...prev]);
-      setCurrentEditingExam(altExam);
-      setCurrentTab('editor');
+      const res = await fetch('/api/generate-alternative-version', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ exam })
+      });
+      if (res.ok) {
+        const altExam: ExamDocument = await res.json();
+        setExams(prev => [altExam, ...prev]);
+        setCurrentEditingExam(altExam);
+        setCurrentTab('editor');
 
-      if (currentUser) {
-        UserDataService.saveUserExam(currentUser.uid, altExam);
+        if (currentUser) {
+          UserDataService.saveUserExam(currentUser.uid, altExam);
+        }
       }
     } catch (err) {
       console.error('Error creating alternative version:', err);

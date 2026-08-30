@@ -22,7 +22,6 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { ALGERIAN_WILAYAS, SchoolYear, TeacherRole, UserProfile } from '../types';
-import { UserDataService } from '../lib/userDataService';
 
 interface ProfileViewProps {
   lang: 'en' | 'fr' | 'both';
@@ -405,71 +404,34 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           </div>
         </div>
 
-        {/* Section 4: Local Storage & Security */}
+        {/* Section 4: Security & Account Actions */}
         <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-emerald-600" />
               <h3 className="text-sm font-bold text-slate-900">
-                {isFr ? 'Stockage Local & Sauvegarde sur l\'appareil' : 'Local Device Storage & Data Backup'}
+                {isFr ? 'Sécurité du Compte & Authentification' : 'Account Security & Cloud Persistence'}
               </h3>
             </div>
-            <span className="text-xs text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-mono font-bold">
-              100% On-Device
-            </span>
+            <span className="text-xs text-slate-400 font-mono">Firebase Auth</span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-              <div className="font-bold text-slate-800 flex items-center gap-1.5">
-                <Download className="w-3.5 h-3.5 text-emerald-600" />
-                <span>{isFr ? 'Sauvegarder mes sujets (JSON)' : 'Export Backup Data (JSON)'}</span>
+          <div className="flex flex-wrap items-center justify-between gap-4 text-xs">
+            <div>
+              <div className="font-bold text-slate-800">{isFr ? 'Mot de passe du compte' : 'Account Password'}</div>
+              <div className="text-slate-500 mt-0.5">
+                {isFr ? 'Recevez un e-mail pour réinitialiser ou changer votre mot de passe en toute sécurité.' : 'Send a secure reset link to your registered email address.'}
               </div>
-              <p className="text-slate-500 text-[11px]">
-                {isFr
-                  ? 'Téléchargez tous vos examens, modèles et questions dans un fichier de sauvegarde.'
-                  : 'Download all your exams, templates, and question bank into a local backup file.'}
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  if (currentUser) {
-                    const data = UserDataService.exportAllLocalData(currentUser.uid);
-                    const blob = new Blob([data], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `ExamCraft_Backup_${formData.displayName?.replace(/\s+/g, '_') || 'Teacher'}_${new Date().toISOString().split('T')[0]}.json`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                  }
-                }}
-                className="w-full py-2 px-3 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>{isFr ? 'Exporter Sauvegarde' : 'Download Backup File'}</span>
-              </button>
             </div>
 
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-              <div className="font-bold text-slate-800 flex items-center gap-1.5">
-                <Key className="w-3.5 h-3.5 text-emerald-600" />
-                <span>{isFr ? 'Mot de passe local' : 'Local Password'}</span>
-              </div>
-              <p className="text-slate-500 text-[11px]">
-                {isFr
-                  ? 'Votre mot de passe est enregistré en toute sécurité uniquement sur cet appareil.'
-                  : 'Your credentials are stored securely on this phone without external transmission.'}
-              </p>
-              <button
-                type="button"
-                onClick={handlePasswordReset}
-                className="w-full py-2 px-3 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 rounded-lg font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
-              >
-                <Key className="w-3.5 h-3.5" />
-                <span>{resetSent ? (isFr ? 'Réinitialisé à "password123"' : 'Reset to "password123"') : (isFr ? 'Réinitialiser Mot de Passe' : 'Reset Local Password')}</span>
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={handlePasswordReset}
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold flex items-center gap-2 transition-colors"
+            >
+              <Key className="w-3.5 h-3.5 text-slate-600" />
+              <span>{resetSent ? (isFr ? 'Lien envoyé !' : 'Reset Link Sent!') : (isFr ? 'Changer de mot de passe' : 'Reset Password')}</span>
+            </button>
           </div>
         </div>
 

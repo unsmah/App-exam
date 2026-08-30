@@ -1,9 +1,0 @@
-{
-	"appId": "dz.examcraft.app",
-	"appName": "ExamCraft DZ",
-	"webDir": "dist",
-	"server": {
-		"androidScheme": "https",
-		"cleartext": true
-	}
-}
