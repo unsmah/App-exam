@@ -1,0 +1,73 @@
+{
+  "$schema": "https://firebase.google.com/docs/firestore/blueprint-schema",
+  "entities": {
+    "UserProfile": {
+      "collection": "users",
+      "fields": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "description": "User email address" },
+        "displayName": { "type": "string", "description": "Teacher display name" },
+        "title": { "type": "string", "description": "Title e.g. Mr./Mrs./Prof." },
+        "photoURL": { "type": "string", "description": "Profile picture URL or avatar ID" },
+        "role": { "type": "string", "description": "Teacher role (teacher, coordinator, inspector)" },
+        "schoolName": { "type": "string", "description": "CEM / Middle school name" },
+        "wilaya": { "type": "string", "description": "Algerian Wilaya" },
+        "commune": { "type": "string", "description": "Commune / Municipality" },
+        "academicYear": { "type": "string", "description": "Academic year e.g. 2024-2025" },
+        "teachingLevels": { "type": "array", "description": "Levels taught e.g. 1AM, 2AM, 3AM, 4AM" },
+        "defaultDuration": { "type": "number", "description": "Default exam duration in minutes" },
+        "defaultPoints": { "type": "number", "description": "Default total exam points" },
+        "defaultLanguage": { "type": "string", "description": "Preferred UI language" },
+        "bio": { "type": "string", "description": "Short bio or notes" },
+        "createdAt": { "type": "string", "description": "ISO timestamp" },
+        "updatedAt": { "type": "string", "description": "ISO timestamp" }
+      }
+    },
+    "UserExam": {
+      "collection": "users/{userId}/exams",
+      "fields": {
+        "id": { "type": "string", "description": "Exam unique ID" },
+        "title": { "type": "string", "description": "Exam Title" },
+        "schoolYear": { "type": "string", "description": "1AM, 2AM, 3AM, or 4AM" },
+        "sequence": { "type": "string", "description": "Sequence title or number" },
+        "theme": { "type": "string", "description": "Sequence theme" },
+        "examType": { "type": "string", "description": "Quiz, Test, Exam, BEM-style" },
+        "durationMinutes": { "type": "number", "description": "Duration in minutes" },
+        "totalPoints": { "type": "number", "description": "Total points" },
+        "difficulty": { "type": "string", "description": "Difficulty level" },
+        "status": { "type": "string", "description": "Draft, Final, Completed, Archived" },
+        "sections": { "type": "array", "description": "Exam sections and questions" },
+        "writingTask": { "type": "object", "description": "Situation of integration / writing task" },
+        "headerConfig": { "type": "object", "description": "Official exam header configuration" },
+        "createdAt": { "type": "string", "description": "ISO timestamp" },
+        "updatedAt": { "type": "string", "description": "ISO timestamp" }
+      }
+    },
+    "UserTemplate": {
+      "collection": "users/{userId}/templates",
+      "fields": {
+        "id": { "type": "string", "description": "Template ID" },
+        "name": { "type": "string", "description": "Template Name" },
+        "schoolYear": { "type": "string", "description": "School Year" },
+        "examType": { "type": "string", "description": "Exam Type" },
+        "description": { "type": "string", "description": "Description" },
+        "structure": { "type": "object", "description": "Template section structure and points" },
+        "createdAt": { "type": "string", "description": "ISO timestamp" }
+      }
+    },
+    "UserQuestionBank": {
+      "collection": "users/{userId}/question_bank",
+      "fields": {
+        "id": { "type": "string", "description": "Question ID" },
+        "question": { "type": "string", "description": "Question text" },
+        "instruction": { "type": "string", "description": "Instruction text" },
+        "type": { "type": "string", "description": "Question type" },
+        "schoolYear": { "type": "string", "description": "1AM, 2AM, 3AM, 4AM" },
+        "skill": { "type": "string", "description": "Reading, Language, Vocabulary, Writing" },
+        "points": { "type": "number", "description": "Points value" },
+        "answer": { "type": "string", "description": "Model answer" },
+        "createdAt": { "type": "string", "description": "ISO timestamp" }
+      }
+    }
+  }
+}
