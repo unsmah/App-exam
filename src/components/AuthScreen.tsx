@@ -125,7 +125,17 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ lang, onToggleLang }) =>
       await signInWithGoogle();
     } catch (err: any) {
       console.error('Google Sign In error:', err);
-      setError(err.message || 'Google sign in failed');
+      let msg = err.message || 'Google sign in failed';
+      if (
+        msg.includes('Unsupported provider') || 
+        msg.includes('provider is not enabled') ||
+        msg.includes('not_enabled')
+      ) {
+        msg = isFr 
+          ? 'La connexion Google n\'est pas activée sur votre instance Supabase. Veuillez l\'activer dans votre console Supabase (Authentication -> Providers -> Google) ou utiliser une inscription classique par e-mail / mot de passe, ou continuer avec le "Mode Invité" !'
+          : 'Google Sign-In is not enabled on your Supabase database. Please enable the Google provider in your Supabase Console (Authentication -> Providers -> Google), or register using traditional Email/Password or continue with "Guest Mode"!';
+      }
+      setError(msg);
     } finally {
       setLoading(false);
     }
